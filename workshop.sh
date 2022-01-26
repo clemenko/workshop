@@ -10,11 +10,9 @@ zone=nyc3
 size=s-4vcpu-8gb
 key=30:98:4f:c5:47:c2:88:28:fe:3c:23:cd:52:49:51:01
 
-domain=stackrox.live
+domain=shirtmullet.com
 
-image=ubuntu-20-04-x64
-
-version=3.0.59.0
+image=rockylinux-8-x64
 
 deploy_k3s=true
 
@@ -65,23 +63,23 @@ for i in $(seq 1 $num); do
 done
 echo "$GREEN" "ok" "$NORMAL"
 
-sleep 15
+sleep 30
 
 echo -n " adding os packages"
-pdsh -l root -w $host_list 'export DEBIAN_FRONTEND=noninteractive; apt-get update; apt-get install jq pdsh resolvconf -y; #apt upgrade -y; #apt autoremove -y ' > /dev/null 2>&1
+pdsh -l root -w $host_list 'yum install -y iscsi-initiator-utils; systemctl start iscsid.service; systemctl enable iscsid.service'  > /dev/null 2>&1
 echo "$GREEN" "ok" "$NORMAL"
 
 echo -n " updating sshd "
 pdsh -l root -w $host_list 'echo "root:Pa22word" | chpasswd; sed -i "s/PasswordAuthentication no/PasswordAuthentication yes/g" /etc/ssh/sshd_config; systemctl restart sshd' > /dev/null 2>&1
 echo "$GREEN" "ok" "$NORMAL"
 
-echo -n " install k3sup and roxctl"
-pdsh -l root -w $host_list 'curl -sLS https://get.k3sup.dev | sudo sh ; curl -#L https://andyc.info/rox/roxctl_Linux_'$version' -o /usr/local/bin/roxctl; chmod 755 /usr/local/bin/roxctl; echo "StrictHostKeyChecking no" > ~/.ssh/config; echo search '$domain' >> /etc/resolvconf/resolv.conf.d/tail; resolvconf -u' > /dev/null 2>&1
+echo -n " install k3sup"
+pdsh -l root -w $host_list 'curl -sLS https://get.k3sup.dev | sudo sh ;echo "StrictHostKeyChecking no" > ~/.ssh/config; echo search '$domain' >> /etc/resolvconf/resolv.conf.d/tail; resolvconf -u' > /dev/null 2>&1
 echo "$GREEN" "ok" "$NORMAL"
 
 echo -n " setting up environment"
 pdsh -l root -w $host_list 'echo $(hostname| sed -e "s/student//" -e "s/a//") > /root/NUM;
-echo "export NUM=\$(cat /root/NUM)" >> .profile; echo "export ipa=\$(getent hosts student\"\$NUM\"a.stackrox.live|awk '"'"'{print \$1}'"'"')" >> .profile;echo "export ipb=\$(getent hosts student\"\$NUM\"b.stackrox.live|awk '"'"'{print \$1}'"'"')" >> .profile;echo "export ipc=\$(getent hosts student\"\$NUM\"c.stackrox.live|awk '"'"'{print \$1}'"'"')" >> .profile ; echo "export PATH=\$PATH:/opt/bin" >> .profile'
+echo "export NUM=\$(cat /root/NUM)" >> .profile; echo "export ipa=\$(getent hosts student\"\$NUM\"a.'$domain'|awk '"'"'{print \$1}'"'"')" >> .profile;echo "export ipb=\$(getent hosts student\"\$NUM\"b.'$domain'|awk '"'"'{print \$1}'"'"')" >> .profile;echo "export ipc=\$(getent hosts student\"\$NUM\"c.'$domain'|awk '"'"'{print \$1}'"'"')" >> .profile ; echo "export PATH=\$PATH:/opt/bin" >> .profile'
 echo "$GREEN" "ok" "$NORMAL"
 
 echo -n " set up ssh key"
@@ -100,10 +98,6 @@ if [ "$deploy_k3s" = true ]; then
   pdsh -l root -w $master_list '/root/master_build.sh' > /dev/null 2>&1
   echo "$GREEN" "ok" "$NORMAL"
 fi
-
-echo -n " preload the offline bundle"
-pdsh -l root -w $host_list "curl -# https://andyc.info/rox/stackrox_all_$version.tar.gz -o /root/stackrox_all_$version.tar.gz" > /dev/null 2>&1
-echo "$GREEN" "ok" "$NORMAL"
 
 echo ""
 echo "===== Cluster ====="
